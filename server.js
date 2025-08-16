@@ -26,3 +26,6 @@ app.get("/api/get/:code", (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Backend running at http://localhost:${PORT}`);
 });
+app.get("/api/ping", (req, res) => {
+  res.json({ pong: true, message: "EasyCopy API is alive" });
+});
