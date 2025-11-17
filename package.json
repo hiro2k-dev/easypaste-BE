@@ -1,6 +1,6 @@
 {
   "name": "easypaste-BE",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.js",
   "repository": "git@github.com:hiro2k-dev/easypaste-BE.git",
   "author": "hiro <huyp26102000@gmail.com>",
@@ -8,6 +8,10 @@
   "dependencies": {
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
+  },
+  "scripts": {
+    "dev": "npx nodemon server.js"
   }
 }
