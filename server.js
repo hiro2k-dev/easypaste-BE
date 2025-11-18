@@ -36,6 +36,31 @@ const upload = multer({
 const store = {};
 const fileStore = {};
 
+function generateSessionCode() {
+  const letters = Array.from({ length: 2 }, () =>
+    String.fromCharCode(65 + Math.floor(Math.random() * 26))
+  ).join("");
+
+  const digitLength = 4 + Math.floor(Math.random() * 3);
+  let digits = "";
+  for (let i = 0; i < digitLength; i++) {
+    digits += Math.floor(Math.random() * 10).toString();
+  }
+
+  return `${letters}${digits}`;
+}
+
+app.post("/api/session", (req, res) => {
+  let code;
+  do {
+    code = generateSessionCode();
+  } while (store[code] || fileStore[code]);
+
+  store[code] = { type: "text", content: "" };
+
+  res.json({ code });
+});
+
 app.post("/api/publish", (req, res) => {
   const { code, type, content } = req.body;
   if (!code || !content || !type) {
@@ -102,7 +127,7 @@ app.get("/api/file/meta/:code", (req, res) => {
       originalName: data.originalName,
       mimeType: data.mimeType,
       size: data.size,
-      uploadedAt: data.uploadedAt,
+      uploadedAt: data.uploadAt,
     },
   });
 });
