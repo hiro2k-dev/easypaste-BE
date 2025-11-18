@@ -12,6 +12,8 @@ app.use(cors());
 app.use(bodyParser.json({ limit: "10mb" }));
 
 const UPLOAD_DIR = path.join(__dirname, "uploads");
+const STORE_FILE = path.join(__dirname, "store.json");
+const FILESTORE_FILE = path.join(__dirname, "fileStore.json");
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -33,8 +35,26 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-const store = {};
-const fileStore = {};
+function loadJSON(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveJSON(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+let store = loadJSON(STORE_FILE);
+let fileStore = loadJSON(FILESTORE_FILE);
+
+function persistStores() {
+  saveJSON(STORE_FILE, store);
+  saveJSON(FILESTORE_FILE, fileStore);
+}
 
 function generateSessionCode() {
   const letters = Array.from({ length: 2 }, () =>
@@ -56,7 +76,9 @@ app.post("/api/session", (req, res) => {
     code = generateSessionCode();
   } while (store[code] || fileStore[code]);
 
-  store[code] = { type: "text", content: "" };
+  const now = Date.now();
+  store[code] = { type: "text", content: "", lastUpdated: now };
+  persistStores();
 
   res.json({ code });
 });
@@ -72,7 +94,10 @@ app.post("/api/publish", (req, res) => {
       .json({ error: "Only type 'text' is supported for this endpoint" });
   }
 
-  store[code] = { type, content };
+  const now = Date.now();
+  store[code] = { type, content, lastUpdated: now };
+  persistStores();
+
   res.json({ ok: true });
 });
 
@@ -97,13 +122,17 @@ app.post("/api/file/upload", upload.single("file"), (req, res) => {
     return res.status(400).json({ error: "Missing file" });
   }
 
+  const now = Date.now();
   fileStore[code] = {
     originalName: file.originalname,
     mimeType: file.mimetype,
     size: file.size,
     path: file.path,
-    uploadedAt: Date.now(),
+    uploadedAt: now,
+    lastUpdated: now,
   };
+
+  persistStores();
 
   res.json({
     ok: true,
@@ -127,7 +156,7 @@ app.get("/api/file/meta/:code", (req, res) => {
       originalName: data.originalName,
       mimeType: data.mimeType,
       size: data.size,
-      uploadedAt: data.uploadAt,
+      uploadedAt: data.uploadedAt,
     },
   });
 });
@@ -183,6 +212,7 @@ app.delete("/api/session/:code", (req, res) => {
     return res.status(404).json({ error: "Not found" });
   }
 
+  persistStores();
   return res.json({ ok: true });
 });
 
