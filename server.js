@@ -48,14 +48,6 @@ function saveJSON(filePath, data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
-let store = loadJSON(STORE_FILE);
-let fileStore = loadJSON(FILESTORE_FILE);
-
-function persistStores() {
-  saveJSON(STORE_FILE, store);
-  saveJSON(FILESTORE_FILE, fileStore);
-}
-
 function generateSessionCode() {
   const letters = Array.from({ length: 2 }, () =>
     String.fromCharCode(65 + Math.floor(Math.random() * 26))
@@ -71,6 +63,9 @@ function generateSessionCode() {
 }
 
 app.post("/api/session", (req, res) => {
+  let store = loadJSON(STORE_FILE);
+  let fileStore = loadJSON(FILESTORE_FILE);
+
   let code;
   do {
     code = generateSessionCode();
@@ -78,7 +73,8 @@ app.post("/api/session", (req, res) => {
 
   const now = Date.now();
   store[code] = { type: "text", content: "", lastUpdated: now };
-  persistStores();
+
+  saveJSON(STORE_FILE, store);
 
   res.json({ code });
 });
@@ -94,14 +90,18 @@ app.post("/api/publish", (req, res) => {
       .json({ error: "Only type 'text' is supported for this endpoint" });
   }
 
+  let store = loadJSON(STORE_FILE);
   const now = Date.now();
+
   store[code] = { type, content, lastUpdated: now };
-  persistStores();
+
+  saveJSON(STORE_FILE, store);
 
   res.json({ ok: true });
 });
 
 app.get("/api/get/:code", (req, res) => {
+  const store = loadJSON(STORE_FILE);
   const data = store[req.params.code];
   if (!data) return res.status(404).json({ error: "Not found" });
   res.json(data);
@@ -122,7 +122,9 @@ app.post("/api/file/upload", upload.single("file"), (req, res) => {
     return res.status(400).json({ error: "Missing file" });
   }
 
+  let fileStore = loadJSON(FILESTORE_FILE);
   const now = Date.now();
+
   fileStore[code] = {
     originalName: file.originalname,
     mimeType: file.mimetype,
@@ -132,7 +134,7 @@ app.post("/api/file/upload", upload.single("file"), (req, res) => {
     lastUpdated: now,
   };
 
-  persistStores();
+  saveJSON(FILESTORE_FILE, fileStore);
 
   res.json({
     ok: true,
@@ -140,12 +142,13 @@ app.post("/api/file/upload", upload.single("file"), (req, res) => {
       originalName: file.originalname,
       mimeType: file.mimetype,
       size: file.size,
-      uploadedAt: fileStore[code].uploadedAt,
+      uploadedAt: now,
     },
   });
 });
 
 app.get("/api/file/meta/:code", (req, res) => {
+  const fileStore = loadJSON(FILESTORE_FILE);
   const data = fileStore[req.params.code];
   if (!data) {
     return res.status(404).json({ error: "Not found" });
@@ -162,6 +165,7 @@ app.get("/api/file/meta/:code", (req, res) => {
 });
 
 app.get("/api/file/download/:code", (req, res) => {
+  const fileStore = loadJSON(FILESTORE_FILE);
   const data = fileStore[req.params.code];
   if (!data) {
     return res.status(404).json({ error: "Not found" });
@@ -181,6 +185,10 @@ app.get("/api/file/download/:code", (req, res) => {
 
 app.delete("/api/session/:code", (req, res) => {
   const code = req.params.code;
+
+  let store = loadJSON(STORE_FILE);
+  let fileStore = loadJSON(FILESTORE_FILE);
+
   let found = false;
 
   if (store[code]) {
@@ -212,7 +220,9 @@ app.delete("/api/session/:code", (req, res) => {
     return res.status(404).json({ error: "Not found" });
   }
 
-  persistStores();
+  saveJSON(STORE_FILE, store);
+  saveJSON(FILESTORE_FILE, fileStore);
+
   return res.json({ ok: true });
 });
 

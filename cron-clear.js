@@ -3,27 +3,26 @@ const fs = require("fs");
 const path = require("path");
 
 const UPLOAD_DIR = path.join(__dirname, "uploads");
-
 const STORE_FILE = path.join(__dirname, "store.json");
 const FILESTORE_FILE = path.join(__dirname, "fileStore.json");
 
-const EXPIRATION_MS = 10 * 60 * 1000; // 10 phút
+const EXPIRATION_MS = 10 * 60 * 1000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function load(pathFile) {
-  if (!fs.existsSync(pathFile)) return {};
+function loadJSON(filePath) {
+  if (!fs.existsSync(filePath)) return {};
   try {
-    return JSON.parse(fs.readFileSync(pathFile, "utf8"));
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
   } catch {
     return {};
   }
 }
 
-function save(pathFile, data) {
-  fs.writeFileSync(pathFile, JSON.stringify(data, null, 2));
+function saveJSON(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
 async function cleanupLoop() {
@@ -33,8 +32,8 @@ async function cleanupLoop() {
     try {
       const now = Date.now();
 
-      let store = load(STORE_FILE);
-      let fileStore = load(FILESTORE_FILE);
+      let store = loadJSON(STORE_FILE);
+      let fileStore = loadJSON(FILESTORE_FILE);
 
       let removed = 0;
 
@@ -57,7 +56,7 @@ async function cleanupLoop() {
             try {
               fs.unlinkSync(filePath);
             } catch (err) {
-              console.log("[CRON] Failed to delete file:", err);
+              console.error("[CRON] Failed to delete file:", err);
             }
           }
 
@@ -66,14 +65,14 @@ async function cleanupLoop() {
         }
       }
 
-      save(STORE_FILE, store);
-      save(FILESTORE_FILE, fileStore);
-
       if (removed > 0) {
         console.log(`[CRON] Removed ${removed} expired sessions.`);
       }
-    } catch (e) {
-      console.error("[CRON] Error in loop:", e);
+
+      saveJSON(STORE_FILE, store);
+      saveJSON(FILESTORE_FILE, fileStore);
+    } catch (err) {
+      console.error("[CRON] Error in loop:", err);
     }
 
     await sleep(2000);
