@@ -9,47 +9,32 @@ const app = express();
 const PORT = 8031;
 
 app.use(cors());
-
-// JSON body limit 10MB
 app.use(bodyParser.json({ limit: "10mb" }));
 
-// ===== File upload config =====
-
-// Upload directory (server operates only inside this directory)
 const UPLOAD_DIR = path.join(__dirname, "uploads");
 
-// Create directory if it doesn't exist
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-// Configure storage for multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
-    // Filename is randomized to avoid collisions and client-provided names
     const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
     cb(null, `${unique}${ext}`);
   },
 });
 
-// Limit file size 10MB
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// ===== In-memory store =====
-// Text store
-const store = {}; // { "123456": { type: "text", content: "..." } }
-
-// File store
-const fileStore = {}; // { "123456": { originalName, mimeType, size, path, uploadedAt } }
-
-// ===== Routes for text =====
+const store = {};
+const fileStore = {};
 
 app.post("/api/publish", (req, res) => {
   const { code, type, content } = req.body;
@@ -72,17 +57,11 @@ app.get("/api/get/:code", (req, res) => {
   res.json(data);
 });
 
-// ===== Routes for file =====
-
-// Upload file: multipart/form-data with fields:
-// - code: session code
-// - file: file upload
 app.post("/api/file/upload", upload.single("file"), (req, res) => {
   const { code } = req.body;
   const file = req.file;
 
   if (!code) {
-    // Delete uploaded file if code is missing
     if (file && file.path && fs.existsSync(file.path)) {
       fs.unlinkSync(file.path);
     }
@@ -134,7 +113,6 @@ app.get("/api/file/download/:code", (req, res) => {
     return res.status(404).json({ error: "Not found" });
   }
 
-  // Ensure file still in UPLOAD_DIR (safe)
   const absolutePath = path.resolve(data.path);
   if (!absolutePath.startsWith(UPLOAD_DIR)) {
     return res.status(400).json({ error: "Invalid file path" });
@@ -147,12 +125,46 @@ app.get("/api/file/download/:code", (req, res) => {
   res.download(absolutePath, data.originalName);
 });
 
-// ===== Health check =====
+app.delete("/api/session/:code", (req, res) => {
+  const code = req.params.code;
+  let found = false;
+
+  if (store[code]) {
+    delete store[code];
+    found = true;
+  }
+
+  const fileMeta = fileStore[code];
+  if (fileMeta) {
+    found = true;
+
+    const absolutePath = path.resolve(fileMeta.path || "");
+    if (
+      absolutePath &&
+      absolutePath.startsWith(UPLOAD_DIR) &&
+      fs.existsSync(absolutePath)
+    ) {
+      try {
+        fs.unlinkSync(absolutePath);
+      } catch (e) {
+        console.error("Failed to delete file", e);
+      }
+    }
+
+    delete fileStore[code];
+  }
+
+  if (!found) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  return res.json({ ok: true });
+});
+
 app.get("/api/ping", (req, res) => {
   res.json({ pong: true, message: "EasyCopy API is alive" });
 });
 
-// ===== Multer error handler (limit 10MB) =====
 app.use((err, req, res, next) => {
   if (err && err.name === "MulterError" && err.code === "LIMIT_FILE_SIZE") {
     return res.status(400).json({ error: "File too large. Max 10MB." });
@@ -160,7 +172,6 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-// ===== Start server =====
 app.listen(PORT, () => {
   console.log(`🚀 Backend running at http://localhost:${PORT}`);
 });
